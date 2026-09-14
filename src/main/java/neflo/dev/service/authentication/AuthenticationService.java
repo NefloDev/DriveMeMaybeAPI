@@ -49,10 +49,10 @@ public class AuthenticationService {
         }
 
         user = userRepository.save(user);
-        log.info("TripCountAPI.Authentication >> SignUp :: Signup successful");
+        log.info("DriveMeMaybeAPIAPI.Authentication >> SignUp :: Signup successful");
 
         String jwtToken = jwtService.generateToken(user);
-        log.info("TripCountAPI.Authentication >> SignUp :: Token generated");
+        log.info("DriveMeMaybeAPIAPI.Authentication >> SignUp :: Token generated");
 
         return new LoginResponse(jwtToken, jwtService.getExpirationTime());
     }
@@ -65,19 +65,19 @@ public class AuthenticationService {
         } catch (Exception e) {
             throw new AuthenticationException("user-authentication-exception", "There was an issue authenticating the current user, try again later.");
         }
-        log.info("TripCountAPI.Authentication >> Login :: Authentication successful");
+        log.info("DriveMeMaybeAPIAPI.Authentication >> Login :: Authentication successful");
 
         UserModel user = userRepository.findByEmail(userLoginDTO.email()).orElseThrow();
 
         String jwtToken = jwtService.generateToken(user);
-        log.info("TripCountAPI.Authentication >> Login :: Token generated");
+        log.info("DriveMeMaybeAPIAPI.Authentication >> Login :: Token generated");
 
         return new LoginResponse(jwtToken, jwtService.getExpirationTime());
     }
 
     public LoginResponse refreshToken(UserModel user) {
         String jwtToken = jwtService.generateToken(user);
-        log.info("TripCountAPI.Authentication >> Refresh :: Token generated");
+        log.info("DriveMeMaybeAPIAPI.Authentication >> Refresh :: Token generated");
 
         return new LoginResponse(jwtToken, jwtService.getExpirationTime());
     }

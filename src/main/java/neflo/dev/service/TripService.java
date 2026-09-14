@@ -25,7 +25,7 @@ import java.util.*;
 @Slf4j
 public class TripService {
 
-    private static final String CLASS_PATH = "TripCount.TripService";
+    private static final String CLASS_PATH = "DriveMeMaybeAPI.TripService";
 
     private final TripRepository repository;
     private final UserRepository userRepository;

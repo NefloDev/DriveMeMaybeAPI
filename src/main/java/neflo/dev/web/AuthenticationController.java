@@ -26,25 +26,25 @@ public class AuthenticationController {
 
     @PostMapping("/signup")
     public ResponseEntity<LoginResponse> registerUser(@RequestBody UserDTO userDTO) {
-        log.info("TripCountAPI.Authentication >> SignUp :: START");
+        log.info("DriveMeMaybeAPIAPI.Authentication >> SignUp :: START");
         return ResponseEntity.ok(authenticationService.signup(userDTO));
     }
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> authenticateUser(@RequestBody UserLoginDTO loginDTO) {
-        log.info("TripCountAPI.Authentication >> Login :: START");
+        log.info("DriveMeMaybeAPIAPI.Authentication >> Login :: START");
         return ResponseEntity.ok(authenticationService.authenticate(loginDTO));
     }
 
     @GetMapping("/refresh")
     public ResponseEntity<LoginResponse> authenticateUser(@AuthenticationPrincipal UserModel user) {
-        log.info("TripCountAPI.Authentication >> Refresh :: START");
+        log.info("DriveMeMaybeAPIAPI.Authentication >> Refresh :: START");
         return ResponseEntity.ok(authenticationService.refreshToken(user));
     }
 
     @PostMapping("/google/login")
     public ResponseEntity<LoginResponse> authenticateGoogleUser(@RequestBody GoogleLoginDTO request) {
-        log.info("TripCountAPI.Authentication >> Google Login :: START");
+        log.info("DriveMeMaybeAPIAPI.Authentication >> Google Login :: START");
         return ResponseEntity.ok(googleAuthenticationService.authenticate(request.idToken()));
     }
 

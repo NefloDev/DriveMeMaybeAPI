@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 public class GroupService {
 
     private static final int MAX_CODE_GENERATION_ATTEMPTS = 5;
-    private static final String CLASS_PATH = "TripCount.GroupService";
+    private static final String CLASS_PATH = "DriveMeMaybeAPI.GroupService";
 
     private final GroupRepository repository;
     private final UserRepository userRepository;

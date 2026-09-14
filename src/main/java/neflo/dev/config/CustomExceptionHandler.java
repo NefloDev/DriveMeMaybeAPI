@@ -25,7 +25,7 @@ public class CustomExceptionHandler {
                 exception.getErrorCode(),
                 exception.getMessage()
         );
-        log.error("TripCount.ExceptionHandler >> NO ENTITIES FOUND EXCEPTION {}", exception.getErrorCode(), exception);
+        log.error("DriveMeMaybeAPI.ExceptionHandler >> NO ENTITIES FOUND EXCEPTION {}", exception.getErrorCode(), exception);
 
         return new ResponseEntity<>(response, status);
     }
@@ -38,7 +38,7 @@ public class CustomExceptionHandler {
                 exception.getErrorCode(),
                 exception.getMessage()
         );
-        log.error("TripCount.ExceptionHandler >> VALIDATION EXCEPTION {}", exception.getErrorCode(), exception);
+        log.error("DriveMeMaybeAPI.ExceptionHandler >> VALIDATION EXCEPTION {}", exception.getErrorCode(), exception);
 
         return new ResponseEntity<>(response, status);
     }
@@ -51,7 +51,7 @@ public class CustomExceptionHandler {
                 exception.getErrorCode(),
                 exception.getMessage()
         );
-        log.error("TripCount.ExceptionHandler >> DATABASE EXCEPTION {}", exception.getErrorCode(), exception);
+        log.error("DriveMeMaybeAPI.ExceptionHandler >> DATABASE EXCEPTION {}", exception.getErrorCode(), exception);
 
         return new ResponseEntity<>(response, status);
     }
@@ -64,7 +64,7 @@ public class CustomExceptionHandler {
                 exception.getErrorCode(),
                 exception.getMessage()
         );
-        log.error("TripCount.ExceptionHandler >> UNEXPECTED EXCEPTION {}", exception.getErrorCode(), exception);
+        log.error("DriveMeMaybeAPI.ExceptionHandler >> UNEXPECTED EXCEPTION {}", exception.getErrorCode(), exception);
 
         return new ResponseEntity<>(response, status);
     }
@@ -77,7 +77,7 @@ public class CustomExceptionHandler {
                 exception.getErrorCode(),
                 exception.getMessage()
         );
-        log.error("TripCount.ExceptionHandler >> AUTHENTICATION EXCEPTION {}", exception.getErrorCode(), exception);
+        log.error("DriveMeMaybeAPI.ExceptionHandler >> AUTHENTICATION EXCEPTION {}", exception.getErrorCode(), exception);
 
         return new ResponseEntity<>(response, status);
     }
@@ -91,7 +91,7 @@ public class CustomExceptionHandler {
                 errorCode,
                 exception.getMessage()
         );
-        log.error("TripCount.ExceptionHandler >> AUTHORIZATION EXCEPTION {}", errorCode, exception);
+        log.error("DriveMeMaybeAPI.ExceptionHandler >> AUTHORIZATION EXCEPTION {}", errorCode, exception);
 
         return new ResponseEntity<>(response, status);
     }
@@ -106,7 +106,7 @@ public class CustomExceptionHandler {
                 errorCode,
                 message
         );
-        log.error("TripCount.ExceptionHandler >> GENERIC EXCEPTION {}", errorCode, exception);
+        log.error("DriveMeMaybeAPI.ExceptionHandler >> GENERIC EXCEPTION {}", errorCode, exception);
 
         return new ResponseEntity<>(response, status);
     }

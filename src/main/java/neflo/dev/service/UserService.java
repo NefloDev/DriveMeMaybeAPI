@@ -24,7 +24,7 @@ import java.util.UUID;
 @Service
 public class UserService {
 
-    private static final String CLASS_PATH = "TripCount.UserService";
+    private static final String CLASS_PATH = "DriveMeMaybeAPI.UserService";
 
     private final UserRepository repository;
     private final GroupRepository groupRepository;

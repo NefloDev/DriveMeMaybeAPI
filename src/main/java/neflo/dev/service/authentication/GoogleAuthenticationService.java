@@ -47,10 +47,10 @@ public class GoogleAuthenticationService {
         UserModel user = userRepository.findByEmail(email)
                 .orElseGet(() -> createUser(email, payload));
 
-        log.info("TripCountAPI.Authentication >> Google Login :: Authentication successful");
+        log.info("DriveMeMaybeAPIAPI.Authentication >> Google Login :: Authentication successful");
 
         String token = jwtService.generateToken(user);
-        log.info("TripCountAPI.Authentication >> Google Login :: Token generated");
+        log.info("DriveMeMaybeAPIAPI.Authentication >> Google Login :: Token generated");
 
         return new LoginResponse(token, jwtService.getExpirationTime());
     }
