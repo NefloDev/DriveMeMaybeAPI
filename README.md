@@ -165,13 +165,21 @@ Do not commit passwords, JWT secrets, API keys, or other sensitive configuration
 
 For local development, environment variables or a local configuration file should be used instead.
 
-### 3. Build the project
+### 3. Add your environment variables
+
+Copy `.env.example` to `.env` and fill in the required values:
+
+```bash
+cp .env.example .env
+```
+
+### 4. Build the project
 
 ```bash
 mvn clean install
 ```
 
-### 4. Run the application
+### 5. Run the application
 
 You can start the application using:
 
