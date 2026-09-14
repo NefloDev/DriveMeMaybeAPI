@@ -12,11 +12,11 @@
     </parent>
 
     <groupId>neflo.dev</groupId>
-    <artifactId>TripCountBackend</artifactId>
+    <artifactId>DriveMeMaybeAPI</artifactId>
     <version>0.1-SNAPSHOT</version>
     <packaging>war</packaging>
-    <name>TripCountBackend</name>
-    <description>TripCountBackend</description>
+    <name>DriveMeMaybeAPI</name>
+    <description>DriveMeMaybeAPI</description>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>

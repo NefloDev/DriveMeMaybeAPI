@@ -12,11 +12,11 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 @Configuration
-public class TripCountConfig {
+public class DriveMeMaybeAPIConfig {
 
     private final UserRepository userRepository;
 
-    public TripCountConfig(UserRepository userRepository) {
+    public DriveMeMaybeAPIConfig(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 
