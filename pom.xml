@@ -109,7 +109,7 @@
     </dependencies>
 
     <build>
-        <finalName>DriveMeMaybeAPIBackend</finalName>
+        <finalName>DriveMeMaybeAPI</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
