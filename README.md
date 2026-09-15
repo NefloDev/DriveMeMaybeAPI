@@ -1,8 +1,8 @@
-# DiveMeMaybeAPI
+# DriveMeMaybeAPI
 
 > Backend API for **DriveMeMaybe**, a mobile application for tracking shared trips and keeping driving balances fair.
 
-DiveMeMaybeAPI is the REST API that powers DriveMeMaybe. It manages users, trip groups, group members, trips, and the balance of each member based on their participation in those trips.
+DriveMeMaybeAPI is the REST API that powers DriveMeMaybe. It manages users, trip groups, group members, trips, and the balance of each member based on their participation in those trips.
 
 The project is built with **Spring Boot** and is designed to be consumed by the DriveMeMaybe mobile application.
 
@@ -153,8 +153,8 @@ mvn --version
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/NefloDev/DiveMeMaybeAPI.git
-cd DiveMeMaybeAPI
+git clone https://github.com/NefloDev/DriveMeMaybeAPI.git
+cd DriveMeMaybeAPI
 ```
 
 ### 2. Configure the database
@@ -301,7 +301,7 @@ For larger changes, opening an issue first is recommended so the approach can be
 
 ## Related Project
 
-This API is the backend for the [DriveMeMaybe](https://github.com/NefloDev/DiveMeMaybe) mobile application.
+This API is the backend for the [DriveMeMaybe](https://github.com/NefloDev/DriveMeMaybe) mobile application.
 
 > **DriveMeMaybe** — A simple way to track who drives, who rides, and keep things fair.
 
