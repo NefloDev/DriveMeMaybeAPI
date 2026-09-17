@@ -73,6 +73,99 @@ This makes it possible to see who has contributed more driving time or distance 
 
 ## Architecture
 
+```mermaid
+flowchart TD
+subgraph group_runtime["Runtime"]
+  node_application{{"Spring Boot application<br/>runtime entry"}}
+  node_servlet["Servlet initializer<br/>deployment adapter"]
+end
+
+subgraph group_api["HTTP API"]
+  node_auth_controller["Authentication API<br/>REST controller"]
+  node_group_controller["Groups API<br/>REST controller"]
+  node_trip_controller["Trips API<br/>REST controller"]
+  node_api_dtos["API DTO contracts<br/>request/response DTOs<br/>[GroupInsights.java]"]
+  node_exception_handler["API exception handler<br/>error boundary"]
+end
+
+subgraph group_security["Security"]
+  node_security_config["Route security policy<br/>security configuration"]
+  node_jwt_filter["JWT request filter<br/>security filter"]
+  node_authentication_service["Authentication service<br/>application service"]
+  node_jwt_service["JWT service<br/>token service<br/>[JwtService.java]"]
+  node_google_auth["Google authentication<br/>external auth adapter"]
+end
+
+subgraph group_domain["Domain services"]
+  node_group_service["Group service<br/>application service<br/>[GroupService.java]"]
+  node_trip_service["Trip service<br/>application service<br/>[TripService.java]"]
+  node_group_membership["Groups and memberships<br/>domain model<br/>[GroupMember.java]"]
+  node_trip_participation["Trips and passengers<br/>domain model<br/>[TripPassenger.java]"]
+  node_trip_mapper["Trip mapper<br/>DTO mapper<br/>[TripMapper.java]"]
+end
+
+subgraph group_persistence["Persistence"]
+  node_jpa_repositories["JPA repositories<br/>repository interfaces"]
+  node_postgres[("PostgreSQL<br/>relational database")]
+end
+
+node_servlet -->|"initializes"| node_application
+node_application -->|"loads"| node_security_config
+node_security_config -->|"installs"| node_jwt_filter
+node_jwt_filter -->|"validates token"| node_jwt_service
+node_auth_controller -->|"login requests"| node_authentication_service
+node_authentication_service -->|"issues tokens"| node_jwt_service
+node_authentication_service -->|"Google login"| node_google_auth
+node_group_controller -->|"group operations"| node_group_service
+node_trip_controller -->|"trip operations"| node_trip_service
+node_auth_controller -->|"uses"| node_api_dtos
+node_group_controller -->|"uses insights DTOs"| node_api_dtos
+node_trip_controller -->|"uses trip DTOs"| node_api_dtos
+node_group_service -->|"manages"| node_group_membership
+node_trip_service -->|"checks membership"| node_group_membership
+node_trip_service -->|"records"| node_trip_participation
+node_trip_service -->|"maps responses"| node_trip_mapper
+node_group_service -->|"persists and queries"| node_jpa_repositories
+node_trip_service -->|"persists and queries"| node_jpa_repositories
+node_authentication_service -->|"loads users"| node_jpa_repositories
+node_jpa_repositories -->|"JPA access"| node_postgres
+node_auth_controller -.->|"errors"| node_exception_handler
+node_group_controller -.->|"errors"| node_exception_handler
+node_trip_controller -.->|"errors"| node_exception_handler
+
+click node_application "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/MainApplication.java"
+click node_servlet "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/ServletInitializer.java"
+click node_auth_controller "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/web/AuthenticationController.java"
+click node_group_controller "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/web/GroupController.java"
+click node_trip_controller "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/web/TripController.java"
+click node_api_dtos "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/model/dto/group/GroupInsights.java"
+click node_security_config "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/config/SecurityConfig.java"
+click node_jwt_filter "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/config/JwtAuthenticationFilter.java"
+click node_authentication_service "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/service/authentication/AuthenticationService.java"
+click node_jwt_service "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/service/authentication/JwtService.java"
+click node_google_auth "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/service/authentication/GoogleAuthenticationService.java"
+click node_group_service "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/service/GroupService.java"
+click node_trip_service "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/service/TripService.java"
+click node_group_membership "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/model/relation/GroupMember.java"
+click node_trip_participation "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/model/relation/TripPassenger.java"
+click node_trip_mapper "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/mapper/TripMapper.java"
+click node_jpa_repositories "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/repository/TripRepository.java"
+click node_exception_handler "https://github.com/neflodev/drivememaybeapi/blob/main/src/main/java/neflo/dev/config/CustomExceptionHandler.java"
+
+classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+class node_application,node_servlet toneBlue
+class node_auth_controller,node_group_controller,node_trip_controller,node_api_dtos,node_exception_handler toneAmber
+class node_security_config,node_jwt_filter,node_authentication_service,node_jwt_service,node_google_auth toneMint
+class node_group_service,node_trip_service,node_group_membership,node_trip_participation,node_trip_mapper toneRose
+class node_jpa_repositories,node_postgres toneIndigo
+```
+
 The application follows a layered architecture:
 
 ```text
@@ -90,25 +183,11 @@ Database
 
 The main responsibilities are separated into:
 
-```text
-Controller
-    Handles HTTP requests and responses
-
-Service
-    Contains application and business logic
-
-Repository
-    Handles persistence and database access
-
-Entity
-    Represents database entities
-
-DTO
-    Defines the data exposed through the API
-
-Mapper
-    Converts between entities and DTOs
-```
+* **Runtime** — Spring Boot entry point and servlet initializer.
+* **HTTP API** — REST controllers, DTO contracts, and exception handling.
+* **Security** — Route policy, JWT filter, authentication service, and Google login.
+* **Domain services** — Group and trip services, membership checks, and DTO mapping.
+* **Persistence** — JPA repositories backed by PostgreSQL.
 
 This separation keeps the HTTP layer, business logic, and persistence logic independent from each other.
 
