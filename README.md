@@ -1,75 +1,127 @@
 # DriveMeMaybeAPI
 
-> Backend API for **DriveMeMaybe**, a mobile application for tracking shared trips and keeping driving balances fair.
+> Backend API for **DriveMeMaybe**, a mobile app for tracking shared trips and keeping driving balances fair.
 
-DriveMeMaybeAPI is the REST API that powers DriveMeMaybe. It manages users, trip groups, group members, trips, and the balance of each member based on their participation in those trips.
+[![Java 21](https://img.shields.io/badge/Java-21-blue)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot 4.1.0](https://img.shields.io/badge/Spring_Boot-4.1.0-brightgreen)](https://spring.io/projects/spring-boot)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-required-blue)](https://www.postgresql.org/)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue)](LICENSE)
 
-The project is built with **Spring Boot** and is designed to be consumed by the DriveMeMaybe mobile application.
+DriveMeMaybeAPI is the REST API that powers DriveMeMaybe. It manages users, trip groups, group members, trips, and each member's balance based on participation.
+
+Built with **Spring Boot** and designed to be consumed by the DriveMeMaybe mobile app — but usable by any HTTP client.
+
+## Contents
+
+- [Features](#features)
+- [How does it work?](#how-does-it-work)
+- [Main concepts](#main-concepts)
+- [Architecture](#architecture)
+- [Technology stack](#technology-stack)
+- [Requirements](#requirements)
+- [Quickstart](#quickstart)
+- [Configuration](#configuration)
+- [Running the application](#running-the-application)
+- [API reference](#api-reference)
+- [Authentication](#authentication)
+- [Error handling](#error-handling)
+- [Project structure](#project-structure)
+- [Development](#development)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [Related project](#related-project)
+- [License](#license)
+
+## Features
+
+- Email/password signup and login with JWT
+- Google Sign-In via ID-token verification
+- Token refresh for active sessions
+- Trip groups with invite-by-code
+- Group member management and leave flow
+- Trip recording with driver + passengers, distance or duration
+- Per-member balances and group insights (by year / month)
+- Centralized error responses
+- Stateless Spring Security with JWT filter and CORS
 
 ## How does it work?
 
-A user can create a **trip group** and invite other users to join it.
+1. A user creates a **trip group** and shares the group code.
+2. Other users join with `GET /users/groups/join/{groupCode}`.
+3. Members record trips with a driver, one or more passengers, and either distance or duration.
+4. Each trip moves balances: driving increases balance, riding decreases it.
 
-Within a group, members can record trips by selecting:
-
-* The driver
-* One or more passengers
-* The trip duration or distance
-* Additional information about the trip
-
-Each trip affects the balance of the people involved.
-
-For example, if Alice drives Bob for 50 km:
+Example — Alice drives Bob for 50 km:
 
 ```text
 Alice   +50 km
 Bob     -50 km
 ```
 
-The same concept can be applied using time instead of distance, depending on the group's configuration.
+The same idea works with time when the group tracks minutes instead of kilometers. Over time the group can see who has driven more without manual math.
 
-This allows groups to keep track of who has been driving and riding over time without having to manually calculate the difference.
+Typical client flow:
+
+```text
+POST /auth/signup → get JWT
+POST /groups/group → create group → share groupCode
+GET  /users/groups/join/{groupCode} → second user joins
+POST /trips/{groupId}/trip → record a trip
+GET  /groups/{groupId}/members/balance → see who is ahead / behind
+```
 
 ## Main concepts
 
 ### Users
 
-Users represent the people using the application.
+People using the app. A user can belong to many groups and take part in many trips.
 
-A user can belong to multiple trip groups and participate in multiple trips.
+Key fields (`UserDTO`): `email`, `password`, `name`, `nickname`, optional profile picture (`pfp`).
 
-### Trip Groups
+### Trip groups
 
-A trip group is a collection of users who want to track their shared trips.
+A collection of users tracking trips together. Groups are joined via a generated `groupCode`.
 
-Each group defines how balances are measured:
+Create payload (`GroupRequestDTO`):
 
-```text
-DISTANCE
-TIME
+```json
+{
+  "name": "Weekend road crew",
+  "pfp": "https://example.com/pfp.png"
+}
 ```
 
 ### Trips
 
-A trip records a single journey made by members of a group.
+One journey inside a group. Contains a driver, passengers, date, distance and/or duration, origin/destination, notes, and the creator (who need not be the driver).
 
-A trip contains:
+Create payload (`TripCreateDTO`):
 
-* A driver
-* One or more passengers
-* A distance or duration
-* Optional additional information
-* The user who created the trip record
+```json
+{
+  "driver": "11111111-1111-1111-1111-111111111111",
+  "date": "2026-09-17",
+  "durationMinutes": 45,
+  "distanceKm": 50,
+  "origin": "Berlin",
+  "destination": "Potsdam",
+  "notes": "Evening return",
+  "passengers": ["22222222-2222-2222-2222-222222222222"]
+}
+```
 
-The person creating the record does not necessarily have to be the driver.
+### Balances and insights
 
-### Balances
+Balance = accumulated driving contribution. Drivers go up, passengers go down.
 
-A member's balance represents their accumulated participation in the group's trips.
+Insights (`GroupInsights`) aggregate driving time per driver for a given year and optional month:
 
-Being the driver increases the balance, while being a passenger decreases it.
-
-This makes it possible to see who has contributed more driving time or distance within the group.
+```json
+{
+  "year": 2026,
+  "month": 9
+}
+```
 
 ## Architecture
 
@@ -169,221 +221,316 @@ class node_jpa_repositories,node_postgres toneIndigo
 The application follows a layered architecture:
 
 ```text
-Controller
+Controller (web/)
     │
     ▼
-Service
+Service (service/ + service/authentication/)
     │
     ▼
-Repository
+Repository (repository/)
     │
     ▼
-Database
+PostgreSQL
 ```
 
-The main responsibilities are separated into:
+Responsibilities:
 
-* **Runtime** — Spring Boot entry point and servlet initializer.
-* **HTTP API** — REST controllers, DTO contracts, and exception handling.
-* **Security** — Route policy, JWT filter, authentication service, and Google login.
-* **Domain services** — Group and trip services, membership checks, and DTO mapping.
-* **Persistence** — JPA repositories backed by PostgreSQL.
+* **Runtime** — `MainApplication.java` entry point, `ServletInitializer.java` for WAR deployment.
+* **HTTP API** — REST controllers in `web/`, DTO contracts in `model/dto/`, centralized errors in `CustomExceptionHandler.java`.
+* **Security** — `SecurityConfig.java` route policy, `JwtAuthenticationFilter.java`, `AuthenticationService.java`, `JwtService.java`, Google login adapter.
+* **Domain services** — `GroupService.java`, `TripService.java`, membership checks, `TripMapper.java` / MapStruct mappers.
+* **Persistence** — Spring Data JPA repositories backed by PostgreSQL; entities in `model/entity/`, join models in `model/relation/`.
 
-This separation keeps the HTTP layer, business logic, and persistence logic independent from each other.
+This keeps HTTP concerns, business logic, and persistence independent.
 
-## Technology Stack
+## Technology stack
 
-| Technology      | Purpose                          |
-| --------------- | -------------------------------- |
-| Java 21         | Programming language             |
-| Spring Boot     | Application framework            |
-| Spring Web      | REST API                         |
-| Spring Data JPA | Database persistence             |
-| PostgreSQL      | Relational database              |
-| Spring Security | Authentication and authorization |
-| JWT             | Stateless authentication         |
-| MapStruct       | DTO/entity mapping               |
-| Lombok          | Boilerplate reduction            |
-| Maven           | Dependency management and build  |
+| Technology | Version | Purpose |
+| ---------- | ------- | ------- |
+| Java | 21 | Programming language |
+| Spring Boot | 4.1.0 | Application framework |
+| Spring Web | via Boot | REST API |
+| Spring Data JPA + JDBC | via Boot | Persistence |
+| Spring Security + OAuth2 Client | via Boot | Auth, JWT filter, Google verification |
+| PostgreSQL driver | via Boot | Relational database |
+| JJWT (`jjwt-api/impl/jackson`) | 0.13.0 | JWT creation / validation |
+| Google API Client | 2.8.1 | Google ID-token verification |
+| MapStruct | 1.6.3 | DTO ↔ entity mapping |
+| Lombok | via Boot | Boilerplate reduction |
+| Commons Lang3 | 3.20.0 | Utilities |
+| Maven | — | Build, WAR packaging (`DriveMeMaybeAPI.war`) |
 
 ## Requirements
 
-Before running the project locally, make sure you have:
+- Java 21+
+- Maven 3.9+
+- PostgreSQL 14+ (running locally or reachable remotely)
+- Google OAuth client ID (only needed for `/auth/google/login`)
 
-* Java 21 or newer
-* Maven
-* PostgreSQL
-* A configured database for the application
-
-You can verify your Java installation with:
+Check your tools:
 
 ```bash
 java --version
-```
-
-and Maven with:
-
-```bash
 mvn --version
+psql --version
 ```
 
-## Getting Started
-
-### 1. Clone the repository
+## Quickstart
 
 ```bash
+# 1. Clone
 git clone https://github.com/NefloDev/DriveMeMaybeAPI.git
 cd DriveMeMaybeAPI
-```
 
-### 2. Configure the database
+# 2. Create database
+createdb driveme_maybe
+# or: CREATE DATABASE driveme_maybe;
 
-Create a PostgreSQL database for the application and configure the database connection in the application's configuration.
+# 3. Configure environment (see Configuration)
+cp src/main/resources/.env.example src/main/resources/.env
+# then edit values, or export them in your shell
 
-Do not commit passwords, JWT secrets, API keys, or other sensitive configuration to the repository.
-
-For local development, environment variables or a local configuration file should be used instead.
-
-### 3. Add your environment variables
-
-Copy `.env.example` to `.env` and fill in the required values:
-
-```bash
-cp .env.example .env
-```
-
-### 4. Build the project
-
-```bash
+# 4. Build
 mvn clean install
-```
 
-### 5. Run the application
-
-You can start the application using:
-
-```bash
+# 5. Run
 mvn spring-boot:run
 ```
 
-Alternatively, build the application and run the generated artifact.
+The API starts on `http://localhost:8080` by default.
 
-## API
+Smoke test:
 
-The API exposes REST endpoints for the main resources used by DriveMeMaybe.
-
-The main areas of the API are:
-
-```text
-Authentication
-    └── User registration and authentication
-
-Users
-    └── User information and management
-
-Groups
-    ├── Create and manage groups
-    └── Manage group members
-
-Trips
-    ├── Create trips
-    ├── Retrieve trips
-    └── Manage trip information
-
-Balances
-    └── Calculate member balances within a group
+```bash
+curl -X POST http://localhost:8080/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"secret123","name":"Alice","nickname":"ali"}'
+# → {"token":"<jwt>","expiresOn":...}
 ```
 
-For a complete list of available endpoints, request/response models, and authentication requirements, see the controller classes in:
+## Configuration
 
-```text
-src/main/java/
+`src/main/resources/application.properties` reads everything from environment variables:
+
+```properties
+spring.datasource.url=${DATABASE_URL}
+spring.datasource.username=${DATABASE_USER}
+spring.datasource.password=${DATABASE_PASSWORD}
+security.jwt.secret-key=${JWT_SECRET_KEY}
+security.jwt.expiration-time=3600000
+spring.security.oauth2.client.registration.google.client-id=${OAUTH2_GOOGLE_CLIENT_ID}
 ```
 
-## Project Structure
+| Variable | Required | Example | Notes |
+| -------- | -------- | ------- | ----- |
+| `DATABASE_URL` | yes | `jdbc:postgresql://localhost:5432/driveme_maybe` | Full JDBC URL |
+| `DATABASE_USER` | yes | `postgres` | DB user |
+| `DATABASE_PASSWORD` | yes | `secret` | Never commit this |
+| `JWT_SECRET_KEY` | yes | long random string | HS256 signing key; use 256-bit+ |
+| `OAUTH2_GOOGLE_CLIENT_ID` | for Google login | `xxx.apps.googleusercontent.com` | Audience checked by `GoogleIdTokenVerifier` |
 
-The project is organized around the application's main responsibilities.
+Tips:
 
-A simplified view looks like this:
+- For local dev, export vars in your shell or use `src/main/resources/.env` + your IDE run config. Do not commit secrets.
+- JWT lifetime is 1 hour (`3600000` ms).
+- CORS allows `GET, POST, PUT, DELETE` with `Authorization, Content-Type` headers (see `SecurityConfig`).
 
-```text
-src/
-└── main/
-    ├── java/
-    │   └── neflo/dev/
-    │       ├── controller/
-    │       ├── service/
-    │       ├── repository/
-    │       ├── model/
-    │       │   ├── entity/
-    │       │   └── dto/
-    │       ├── mapper/
-    │       ├── security/
-    │       └── exceptions/
-    │
-    └── resources/
-        └── application.properties
+## Running the application
+
+```bash
+# Development (with live reload if DevTools is added)
+mvn spring-boot:run
+
+# Build WAR (uses ServletInitializer, Tomcat is provided-scope)
+mvn clean package
+# → target/DriveMeMaybeAPI.war
+
+# Run packaged artifact
+java -jar target/DriveMeMaybeAPI.war
 ```
 
-The exact package structure may evolve as the project grows, but the goal is to keep each part of the application focused on a single responsibility.
+Logs default to `INFO` (`logging.level.root=INFO`).
+
+## API reference
+
+Base URL: `http://localhost:8080`. All endpoints except `POST /auth/signup`, `POST /auth/login`, and `POST /auth/google/login` require `Authorization: Bearer <token>`.
+
+Source of truth: [`web/`](src/main/java/neflo/dev/web/).
+
+### Auth — [`AuthenticationController.java`](src/main/java/neflo/dev/web/AuthenticationController.java)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| POST | `/auth/signup` | public | Register with `UserDTO`, returns `LoginResponse(token, expiresOn)` |
+| POST | `/auth/login` | public | Login with `{email, password}`, returns `LoginResponse` |
+| GET | `/auth/refresh` | JWT | Re-issue token for current user |
+| POST | `/auth/google/login` | public | Login with `{idToken}`, verifies with Google, returns `LoginResponse` |
+
+```bash
+# login
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"secret123"}'
+
+# authenticated request
+curl http://localhost:8080/users/profile \
+  -H "Authorization: Bearer <token>"
+```
+
+### Users — [`UserController.java`](src/main/java/neflo/dev/web/UserController.java)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/users/profile` | Current user details |
+| GET | `/users/groups` | Groups the current user belongs to |
+| GET | `/users/groups/join/{groupCode}` | Join a group by invite code |
+| PUT | `/users/update` | Update profile (`UserDTO`) |
+| DELETE | `/users/delete` | Delete current user |
+
+### Groups — [`GroupController.java`](src/main/java/neflo/dev/web/GroupController.java)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| POST | `/groups/group` | Create group (`GroupRequestDTO`) |
+| GET | `/groups/{groupId}` | Group details (members only) |
+| GET | `/groups/{groupId}/members` | Member list |
+| GET | `/groups/{groupId}/members/balance` | Per-member balances |
+| GET | `/groups/{groupId}/trips` | Trips in group |
+| POST | `/groups/{groupId}/insights` | Insights for `{year, month}` (`GroupInsightsRequest`) |
+| PUT | `/groups/{groupId}/update` | Update group |
+| PUT | `/groups/{groupId}/leave` | Leave group |
+
+```bash
+curl -X POST http://localhost:8080/groups/group \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Weekend road crew"}'
+```
+
+### Trips — [`TripController.java`](src/main/java/neflo/dev/web/TripController.java)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| POST | `/trips/{groupId}/trip` | Create trip (`TripCreateDTO`) |
+| GET | `/trips/{groupId}/{tripId}` | Trip details |
+| PUT | `/trips/{groupId}/{tripId}` | Update trip |
+| DELETE | `/trips/{groupId}/{tripId}` | Delete trip |
+
+```bash
+curl -X POST http://localhost:8080/trips/<groupId>/trip \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"driver":"<uuid>","date":"2026-09-17","distanceKm":50,"passengers":["<uuid>"]}'
+```
 
 ## Authentication
 
-Protected endpoints require authentication using a JWT.
+- Public: `/auth/signup`, `/auth/login`, `/auth/google/login` are `permitAll`. `GET /auth/refresh` requires a valid JWT; everything else requires authentication (`SecurityConfig.java`).
+- Stateless sessions (`SessionCreationPolicy.STATELESS`) + `JwtAuthenticationFilter` before `UsernamePasswordAuthenticationFilter`.
+- Client sends: `Authorization: Bearer <token>`.
+- Invalid / expired tokens → `403` with `authorizationException` (see below).
 
-After authenticating, the client should include the token in the `Authorization` header:
+## Error handling
 
-```http
-Authorization: Bearer <token>
+Handled by [`CustomExceptionHandler.java`](src/main/java/neflo/dev/config/CustomExceptionHandler.java). Shape (`CustomErrorResponse`):
+
+```json
+{
+  "errorCode": "validation-exception",
+  "detail": "Group not found",
+  "statusCode": 404,
+  "statusName": "NOT_FOUND",
+  "timestamp": "2026-09-17T12:00:00"
+}
 ```
 
-The API validates the token before allowing access to protected resources.
+| HTTP | When |
+| ---- | ---- |
+| 400 | `ValidationException` |
+| 401 | `AuthenticationException` |
+| 403 | JWT / auth-filter failures (`authorizationException`) |
+| 404 | `NoEntitiesFoundException` |
+| 500 | `DatabaseException`, `UnexpectedException`, generic fallback |
+
+## Project structure
+
+Actual layout (`src/main/java/neflo/dev/`):
+
+```text
+src/main/
+├── java/neflo/dev/
+│   ├── MainApplication.java          # Boot entry point
+│   ├── ServletInitializer.java       # WAR deployment
+│   ├── web/                          # REST controllers
+│   │   ├── AuthenticationController.java
+│   │   ├── UserController.java
+│   │   ├── GroupController.java
+│   │   └── TripController.java
+│   ├── service/
+│   │   ├── GroupService.java
+│   │   ├── TripService.java
+│   │   ├── UserService.java
+│   │   ├── GroupCodeGenerator.java
+│   │   └── authentication/
+│   │       ├── AuthenticationService.java
+│   │       ├── GoogleAuthenticationService.java
+│   │       └── JwtService.java
+│   ├── repository/                   # Spring Data JPA + JDBC
+│   │   ├── UserRepository.java
+│   │   ├── GroupRepository.java
+│   │   ├── TripRepository.java
+│   │   └── JDBCRepository.java
+│   ├── model/
+│   │   ├── entity/                   # UserModel, GroupModel, TripModel
+│   │   ├── relation/                 # GroupMember, TripPassenger
+│   │   └── dto/                      # Request/response records
+│   │       ├── user/, group/, trip/
+│   │       ├── LoginResponse.java
+│   │       └── GoogleLoginDTO.java
+│   ├── mapper/                       # MapStruct: User/Group/TripMapper
+│   ├── config/                       # Security, JWT filter, exception handler
+│   └── exceptions/                   # Custom exceptions + CustomErrorResponse
+└── resources/
+    ├── application.properties
+    └── .env.example
+```
+
+Single-responsibility rules: controllers stay HTTP-only, business rules live in services, persistence in repositories, API never exposes entities directly — use DTOs.
 
 ## Development
 
-This project is primarily developed as the backend for the DriveMeMaybe mobile application, but the API can also be used independently by other clients.
-
-When adding new functionality, try to keep the following principles in mind:
-
-* Keep controllers focused on HTTP concerns.
-* Keep business logic inside services.
-* Avoid exposing database entities directly through the API.
-* Use DTOs for API requests and responses.
-* Validate incoming data at the API boundary.
-* Keep authentication and authorization separate from business logic.
-* Add tests when introducing or changing business rules.
+- Keep controllers thin; put logic in `service/`.
+- Validate at the API boundary; use DTO records.
+- Keep auth (Security / JWT / Google) separate from domain logic.
+- Map entities ↔ DTOs via MapStruct mappers.
+- Add/extend `CustomExceptionHandler` cases instead of leaking stack traces.
 
 ## Testing
-
-Run the test suite with:
 
 ```bash
 mvn test
 ```
 
-Before submitting a change, make sure the project builds successfully and existing tests continue to pass.
+Ensure a clean build plus tests before opening a PR:
+
+```bash
+mvn clean verify
+```
 
 ## Contributing
 
-Contributions are welcome.
+1. Open an issue describing the bug / proposal (recommended for large changes).
+2. Fork, then create a feature branch.
+3. Make changes + add/update tests.
+4. Ensure `mvn clean verify` passes.
+5. Open a pull request with a clear description and curl examples if you touch the API.
 
-If you find a bug, have an idea, or want to improve the project, feel free to:
+## Related project
 
-1. Open an issue describing the problem or proposal.
-2. Fork the repository.
-3. Create a branch for your changes.
-4. Make your changes.
-5. Add or update tests where appropriate.
-6. Open a pull request.
-
-For larger changes, opening an issue first is recommended so the approach can be discussed before implementation.
-
-## Related Project
-
-This API is the backend for the [DriveMeMaybe](https://github.com/NefloDev/DriveMeMaybe) mobile application.
+Backend for the [DriveMeMaybe](https://github.com/NefloDev/DriveMeMaybe) mobile app.
 
 > **DriveMeMaybe** — A simple way to track who drives, who rides, and keep things fair.
 
 ## License
 
-This project is open source. See the [LICENSE](LICENSE) file for details.
+GPL-3.0 — see [LICENSE](LICENSE).
