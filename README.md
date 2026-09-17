@@ -355,7 +355,7 @@ Logs default to `INFO` (`logging.level.root=INFO`).
 
 Base URL: `http://localhost:8080`. All endpoints except `POST /auth/signup`, `POST /auth/login`, and `POST /auth/google/login` require `Authorization: Bearer <token>`.
 
-Source of truth: [`web/`](src/main/java/neflo/dev/web/).
+For exact paths, see the controllers in [`web/`](src/main/java/neflo/dev/web/).
 
 ### Auth — [`AuthenticationController.java`](src/main/java/neflo/dev/web/AuthenticationController.java)
 
