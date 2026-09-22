@@ -1,0 +1,1295 @@
+openapi: 3.1.0
+info:
+  title: DriveMeMaybeAPI
+  version: 0.1.0
+  description: |
+    REST API for DriveMeMaybe, a mobile app for tracking shared trips and keeping
+    driving balances fair. Manages users, trip groups (invite-by-code), group members,
+    trips (driver + passengers, distance and/or duration), per-member balances and
+    group driving-time insights. Consumed primarily by the DriveMeMaybe mobile app,
+    usable by any HTTP client.
+  license:
+    name: GPL-3.0-only
+    url: https://www.gnu.org/licenses/gpl-3.0.html
+servers:
+  - url: http://localhost:8080
+    description: Development (default Spring Boot port)
+  - url: https://api.example.com
+    description: Production (replace with real host)
+tags:
+  - name: Authentication
+    description: Signup, login (email/password + Google), and token refresh.
+  - name: Users
+    description: Current-user profile, preference filters, own groups, join-by-code, update/delete.
+  - name: Groups
+    description: Trip-group lifecycle, members, balances, trips listing, insights.
+  - name: Trips
+    description: Trip recording inside a group (driver, passengers, date, distance/duration).
+paths:
+  /auth/signup:
+    post:
+      tags: [Authentication]
+      summary: Register a new user
+      operationId: signupUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserDTO'
+            examples:
+              default:
+                value:
+                  email: alice@example.com
+                  password: secret123
+                  name: Alice
+                  nickname: ali
+                  pfp: https://example.com/pfp/alice.png
+                  preferences:
+                    isDarkMode: false
+                    preferredLang: EN
+      responses:
+        '200':
+          description: Registered. Returns JWT and expiry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                default:
+                  value:
+                    token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZUBleGFtcGxlLmNvbSJ9.signature
+                    expiresOn: 1789990800000
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login with email and password
+      operationId: loginUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLoginDTO'
+            examples:
+              default:
+                value:
+                  email: alice@example.com
+                  password: secret123
+      responses:
+        '200':
+          description: Authenticated. Returns JWT and expiry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                default:
+                  value:
+                    token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZUBleGFtcGxlLmNvbSJ9.signature
+                    expiresOn: 1789990800000
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /auth/refresh:
+    get:
+      tags: [Authentication]
+      summary: Re-issue a token for the current user
+      operationId: refreshToken
+      responses:
+        '200':
+          description: New token issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                default:
+                  value:
+                    token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZUBleGFtcGxlLmNvbSJ9.signature
+                    expiresOn: 1789990800000
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /auth/google/login:
+    post:
+      tags: [Authentication]
+      summary: Login with a Google ID token
+      operationId: loginGoogleUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleLoginDTO'
+            examples:
+              default:
+                value:
+                  idToken: eyJhbGciOiJSUzI1NiIsImtpZCI6IjEyMzQifQ.eyJlbWFpbCI6ImFsaWNlQGV4YW1wbGUuY29tIn0.signature
+      responses:
+        '200':
+          description: Authenticated via Google. Returns JWT and expiry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                default:
+                  value:
+                    token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZUBleGFtcGxlLmNvbSJ9.signature
+                    expiresOn: 1789990800000
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /users/profile:
+    get:
+      tags: [Users]
+      summary: Get current user details
+      operationId: getUserProfile
+      responses:
+        '200':
+          description: The current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponseDTO'
+              examples:
+                default:
+                  value:
+                    id: 11111111-1111-1111-1111-111111111111
+                    email: alice@example.com
+                    name: Alice
+                    nickname: ali
+                    pfp: https://example.com/pfp/alice.png
+                    preferences:
+                      isDarkMode: true
+                      preferredLang: English
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /users/prefs:
+    get:
+      tags: [Users]
+      summary: List available preference filters (languages)
+      operationId: getUserPreferencesFilters
+      responses:
+        '200':
+          description: Languages the client can offer for preferredLang, sorted by code.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPreferencesFilters'
+              examples:
+                default:
+                  value:
+                    languageSelection:
+                      - code: DE
+                        formalName: Deutsch
+                      - code: EN
+                        formalName: English
+                      - code: FR
+                        formalName: Français
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /users/groups:
+    get:
+      tags: [Users]
+      summary: List groups the current user belongs to
+      operationId: listUserGroups
+      responses:
+        '200':
+          description: Groups of the current user (empty list if none).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GroupDTO'
+              examples:
+                default:
+                  value:
+                    - id: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+                      name: Weekend road crew
+                      groupCode: XK7Q2M
+                      groupMembers: 2
+                      groupTrips: 5
+                      pfp: https://example.com/pfp/group.png
+                    - id: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+                      name: Commute buddies
+                      groupCode: Q9W4TA
+                      groupMembers: 3
+                      groupTrips: 0
+                      pfp: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /users/groups/join/{groupCode}:
+    get:
+      tags: [Users]
+      summary: Join a group by invite code
+      operationId: joinGroupByCode
+      parameters:
+        - $ref: '#/components/parameters/GroupCodePath'
+      responses:
+        '200':
+          description: Joined group.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupDTO'
+              examples:
+                default:
+                  value:
+                    id: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+                    name: Weekend road crew
+                    groupCode: XK7Q2M
+                    groupMembers: 2
+                    groupTrips: 5
+                    pfp: https://example.com/pfp/group.png
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /users/update:
+    put:
+      tags: [Users]
+      summary: Update current user profile
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserDTO'
+            examples:
+              default:
+                value:
+                  email: alice.new@example.com
+                  name: Alice Smith
+                  nickname: ali-s
+                  pfp: https://example.com/pfp/alice-new.png
+                  preferences:
+                    isDarkMode: true
+                    preferredLang: EN
+      responses:
+        '200':
+          description: Updated user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponseDTO'
+              examples:
+                default:
+                  value:
+                    id: 11111111-1111-1111-1111-111111111111
+                    email: alice.new@example.com
+                    name: Alice Smith
+                    nickname: ali-s
+                    pfp: https://example.com/pfp/alice-new.png
+                    preferences:
+                      isDarkMode: true
+                      preferredLang: English
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /users/delete:
+    delete:
+      tags: [Users]
+      summary: Delete current user
+      operationId: deleteUser
+      responses:
+        '200':
+          description: User deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /groups/group:
+    post:
+      tags: [Groups]
+      summary: Create a trip group
+      operationId: createGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupRequestDTO'
+            examples:
+              default:
+                value:
+                  name: Weekend road crew
+                  pfp: https://example.com/pfp/group.png
+      responses:
+        '200':
+          description: Created group (API returns 200, not 201).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupDTO'
+              examples:
+                default:
+                  value:
+                    id: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+                    name: Weekend road crew
+                    groupCode: XK7Q2M
+                    groupMembers: 1
+                    groupTrips: 0
+                    pfp: https://example.com/pfp/group.png
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /groups/{groupId}:
+    parameters:
+      - $ref: '#/components/parameters/GroupIdPath'
+    get:
+      tags: [Groups]
+      summary: Get group details (members only)
+      operationId: getGroupDetail
+      responses:
+        '200':
+          description: The group.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupDTO'
+              examples:
+                default:
+                  value:
+                    id: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+                    name: Weekend road crew
+                    groupCode: XK7Q2M
+                    groupMembers: 2
+                    groupTrips: 5
+                    pfp: https://example.com/pfp/group.png
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /groups/{groupId}/members:
+    parameters:
+      - $ref: '#/components/parameters/GroupIdPath'
+    get:
+      tags: [Groups]
+      summary: List group members
+      operationId: listGroupMembers
+      responses:
+        '200':
+          description: Member list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GroupMemberDTO'
+              examples:
+                default:
+                  value:
+                    - id: 11111111-1111-1111-1111-111111111111
+                      nickname: ali
+                    - id: 22222222-2222-2222-2222-222222222222
+                      nickname: bob
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /groups/{groupId}/members/balance:
+    parameters:
+      - $ref: '#/components/parameters/GroupIdPath'
+    get:
+      tags: [Groups]
+      summary: Get per-member driving balances
+      operationId: listGroupMemberBalances
+      responses:
+        '200':
+          description: Balances. Driving increases balance, riding decreases it.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GroupMemberBalanceDTO'
+              examples:
+                default:
+                  value:
+                    - nickname: ali
+                      timeBalance: 45
+                      kmBalance: 50
+                    - nickname: bob
+                      timeBalance: -45
+                      kmBalance: -50
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /groups/{groupId}/trips:
+    parameters:
+      - $ref: '#/components/parameters/GroupIdPath'
+    get:
+      tags: [Groups]
+      summary: List trips in a group
+      operationId: listGroupTrips
+      responses:
+        '200':
+          description: Trips in the group.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TripRequestDTO'
+              examples:
+                default:
+                  value:
+                    - driver: ali
+                      date: '2026-09-17'
+                      durationMinutes: 45
+                      origin: Berlin
+                      destination: Potsdam
+                      notes: Evening return
+                      tripId: cccccccc-cccc-cccc-cccc-cccccccccccc
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /groups/{groupId}/insights:
+    parameters:
+      - $ref: '#/components/parameters/GroupIdPath'
+    post:
+      tags: [Groups]
+      summary: Get driving-time insights for a period
+      operationId: getGroupInsights
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupInsightsRequest'
+            examples:
+              monthly:
+                value:
+                  periodType: MONTHLY
+                  year: 2026
+                  month: 9
+              yearly:
+                value:
+                  periodType: YEARLY
+                  year: 2026
+                  month: null
+      responses:
+        '200':
+          description: Aggregated driving time per driver nickname.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupInsights'
+              examples:
+                default:
+                  value:
+                    year: 2026
+                    month: 9
+                    driverDrivingTime:
+                      ali: 120
+                      bob: 45
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /groups/{groupId}/update:
+    parameters:
+      - $ref: '#/components/parameters/GroupIdPath'
+    put:
+      tags: [Groups]
+      summary: Update a group
+      operationId: updateGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupDTO'
+            examples:
+              default:
+                value:
+                  id: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+                  name: Weekend road crew 2026
+                  groupCode: XK7Q2M
+                  groupMembers: 2
+                  groupTrips: 5
+                  pfp: https://example.com/pfp/group-new.png
+      responses:
+        '200':
+          description: Updated group.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupDTO'
+              examples:
+                default:
+                  value:
+                    id: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+                    name: Weekend road crew 2026
+                    groupCode: XK7Q2M
+                    groupMembers: 2
+                    groupTrips: 5
+                    pfp: https://example.com/pfp/group-new.png
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /groups/{groupId}/leave:
+    parameters:
+      - $ref: '#/components/parameters/GroupIdPath'
+    put:
+      tags: [Groups]
+      summary: Leave a group
+      operationId: leaveGroup
+      responses:
+        '200':
+          description: Left the group.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /trips/{groupId}/trip:
+    parameters:
+      - $ref: '#/components/parameters/GroupIdPath'
+    post:
+      tags: [Trips]
+      summary: Record a trip in a group
+      operationId: createTrip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripCreateDTO'
+            examples:
+              default:
+                value:
+                  driver: 11111111-1111-1111-1111-111111111111
+                  date: '2026-09-17'
+                  durationMinutes: 45
+                  distanceKm: 50
+                  origin: Berlin
+                  destination: Potsdam
+                  notes: Evening return
+                  passengers:
+                    - 22222222-2222-2222-2222-222222222222
+      responses:
+        '200':
+          description: Created trip (API returns 200, not 201).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripDTO'
+              examples:
+                default:
+                  value:
+                    id: cccccccc-cccc-cccc-cccc-cccccccccccc
+                    driverId: 11111111-1111-1111-1111-111111111111
+                    driver: ali
+                    date: '2026-09-17'
+                    durationMinutes: 45
+                    distanceKm: 50
+                    origin: Berlin
+                    destination: Potsdam
+                    notes: Evening return
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /trips/{groupId}/{tripId}:
+    parameters:
+      - $ref: '#/components/parameters/GroupIdPath'
+      - $ref: '#/components/parameters/TripIdPath'
+    get:
+      tags: [Trips]
+      summary: Get trip details
+      operationId: getTripDetail
+      responses:
+        '200':
+          description: The trip.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripDTO'
+              examples:
+                default:
+                  value:
+                    id: cccccccc-cccc-cccc-cccc-cccccccccccc
+                    driverId: 11111111-1111-1111-1111-111111111111
+                    driver: ali
+                    date: '2026-09-17'
+                    durationMinutes: 45
+                    distanceKm: 50
+                    origin: Berlin
+                    destination: Potsdam
+                    notes: Evening return
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags: [Trips]
+      summary: Update a trip
+      operationId: updateTrip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripCreateDTO'
+            examples:
+              default:
+                value:
+                  driver: 11111111-1111-1111-1111-111111111111
+                  date: '2026-09-18'
+                  durationMinutes: 50
+                  distanceKm: 55
+                  origin: Berlin
+                  destination: Potsdam
+                  notes: Morning return
+                  passengers:
+                    - 22222222-2222-2222-2222-222222222222
+      responses:
+        '200':
+          description: Updated trip.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripDTO'
+              examples:
+                default:
+                  value:
+                    id: cccccccc-cccc-cccc-cccc-cccccccccccc
+                    driverId: 11111111-1111-1111-1111-111111111111
+                    driver: ali
+                    date: '2026-09-18'
+                    durationMinutes: 50
+                    distanceKm: 55
+                    origin: Berlin
+                    destination: Potsdam
+                    notes: Morning return
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [Trips]
+      summary: Delete a trip
+      operationId: deleteTrip
+      responses:
+        '200':
+          description: Trip deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Send `Authorization: Bearer <token>`. Tokens are issued by
+        POST /auth/signup, POST /auth/login and POST /auth/google/login
+        (1 hour lifetime) and can be re-issued via GET /auth/refresh.
+  parameters:
+    GroupIdPath:
+      name: groupId
+      in: path
+      required: true
+      description: Group UUID.
+      schema:
+        type: string
+        format: uuid
+      example: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+    TripIdPath:
+      name: tripId
+      in: path
+      required: true
+      description: Trip UUID.
+      schema:
+        type: string
+        format: uuid
+      example: cccccccc-cccc-cccc-cccc-cccccccccccc
+    GroupCodePath:
+      name: groupCode
+      in: path
+      required: true
+      description: Human-readable group invite code.
+      schema:
+        type: string
+        minLength: 1
+        example: XK7Q2M
+  schemas:
+    UserDTO:
+      type: object
+      description: Signup / profile-update payload. `password` and `pfp` are optional. `preferences.preferredLang` is resolved case-insensitively against the languages table (defaults to `EN`); `preferences.isDarkMode` maps to the stored dark-mode flag.
+      required: [email, name, nickname]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: secret123
+        name:
+          type: string
+          minLength: 1
+          example: Alice
+        nickname:
+          type: string
+          minLength: 1
+          example: ali
+        pfp:
+          type: string
+          format: uri
+          example: https://example.com/pfp/alice.png
+        preferences:
+          $ref: '#/components/schemas/UserPreferences'
+    UserLoginDTO:
+      type: object
+      description: Email/password login payload.
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        password:
+          type: string
+          format: password
+          example: secret123
+    UserResponseDTO:
+      type: object
+      description: Public user details. `preferences.preferredLang` is the language formal name (null when unset).
+      required: [id, email, name, nickname]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 11111111-1111-1111-1111-111111111111
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        name:
+          type: string
+          example: Alice
+        nickname:
+          type: string
+          example: ali
+        pfp:
+          type: string
+          format: uri
+          nullable: true
+          example: https://example.com/pfp/alice.png
+        preferences:
+          $ref: '#/components/schemas/UserPreferences'
+    UserPreferences:
+      type: object
+      description: User display preferences. `isDarkMode` maps to `PREF_DARK_MODE`; `preferredLang` carries the language code on write and the formal name on read.
+      properties:
+        isDarkMode:
+          type: boolean
+          nullable: true
+          example: true
+        preferredLang:
+          type: string
+          nullable: true
+          example: EN
+    UserPreferencesFilters:
+      type: object
+      description: Available preference options returned by GET /users/prefs. Entries are mapped from the USR_PREFS_LANGUAGES table and sorted by code.
+      required: [languageSelection]
+      properties:
+        languageSelection:
+          type: array
+          items:
+            type: object
+            required: [code, formalName]
+            properties:
+              code:
+                type: string
+                example: EN
+              formalName:
+                type: string
+                example: English
+          example:
+            - code: DE
+              formalName: Deutsch
+            - code: EN
+              formalName: English
+            - code: FR
+              formalName: Français
+    GoogleLoginDTO:
+      type: object
+      description: Google Sign-In payload; `idToken` is verified server-side.
+      required: [idToken]
+      properties:
+        idToken:
+          type: string
+          example: eyJhbGciOiJSUzI1NiIsImtpZCI6IjEyMzQifQ.eyJlbWFpbCI6ImFsaWNlQGV4YW1wbGUuY29tIn0.signature
+    LoginResponse:
+      type: object
+      description: JWT plus absolute expiry in epoch millis.
+      required: [token, expiresOn]
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZUBleGFtcGxlLmNvbSJ9.signature
+        expiresOn:
+          type: integer
+          format: int64
+          description: Epoch milliseconds when the token expires (issued + 3600000 ms).
+          example: 1789990800000
+    GroupDTO:
+      type: object
+      description: Trip group. `pfp` is optional. `groupMembers` / `groupTrips` are derived counts (members.size() / trips.size()).
+      required: [id, name, groupCode]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+        name:
+          type: string
+          minLength: 1
+          example: Weekend road crew
+        groupCode:
+          type: string
+          example: XK7Q2M
+        groupMembers:
+          type: integer
+          minimum: 0
+          example: 2
+        groupTrips:
+          type: integer
+          minimum: 0
+          example: 5
+        pfp:
+          type: string
+          format: uri
+          nullable: true
+          example: https://example.com/pfp/group.png
+    GroupRequestDTO:
+      type: object
+      description: Create-group payload.
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          example: Weekend road crew
+        pfp:
+          type: string
+          format: uri
+          example: https://example.com/pfp/group.png
+    GroupMemberDTO:
+      type: object
+      description: Group membership entry.
+      required: [id, nickname]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 11111111-1111-1111-1111-111111111111
+        nickname:
+          type: string
+          example: ali
+    GroupMemberBalanceDTO:
+      type: object
+      description: Accumulated balance per member. Driving adds, riding subtracts.
+      required: [nickname, timeBalance, kmBalance]
+      properties:
+        nickname:
+          type: string
+          example: ali
+        timeBalance:
+          type: integer
+          description: Net minutes.
+          example: 45
+        kmBalance:
+          type: integer
+          description: Net kilometers.
+          example: 50
+    GroupInsightsRequest:
+      type: object
+      description: Period selector. `month` is required for MONTHLY, null/omitted for YEARLY.
+      required: [periodType, year]
+      properties:
+        periodType:
+          type: string
+          enum: [MONTHLY, YEARLY]
+          example: MONTHLY
+        year:
+          type: integer
+          minimum: 2000
+          maximum: 2100
+          example: 2026
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          nullable: true
+          example: 9
+    GroupInsights:
+      type: object
+      description: Driving-time aggregates per driver nickname for the period.
+      required: [year, driverDrivingTime]
+      properties:
+        year:
+          type: integer
+          example: 2026
+        month:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 12
+          example: 9
+        driverDrivingTime:
+          type: object
+          description: Map of driver nickname to driven minutes.
+          additionalProperties:
+            type: integer
+            minimum: 0
+          example:
+            ali: 120
+            bob: 45
+    TripCreateDTO:
+      type: object
+      description: Create/update trip payload. Provide distance and/or duration; at least one passenger.
+      required: [driver, date, passengers]
+      properties:
+        driver:
+          type: string
+          format: uuid
+          description: Driver user UUID (must be a group member).
+          example: 11111111-1111-1111-1111-111111111111
+        date:
+          type: string
+          format: date
+          example: '2026-09-17'
+        durationMinutes:
+          type: integer
+          minimum: 0
+          nullable: true
+          example: 45
+        distanceKm:
+          type: integer
+          minimum: 0
+          nullable: true
+          example: 50
+        origin:
+          type: string
+          nullable: true
+          example: Berlin
+        destination:
+          type: string
+          nullable: true
+          example: Potsdam
+        notes:
+          type: string
+          nullable: true
+          example: Evening return
+        passengers:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+          example:
+            - 22222222-2222-2222-2222-222222222222
+    TripDTO:
+      type: object
+      description: Trip details with resolved driver nickname.
+      required: [id, driverId, driver, date]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: cccccccc-cccc-cccc-cccc-cccccccccccc
+        driverId:
+          type: string
+          format: uuid
+          example: 11111111-1111-1111-1111-111111111111
+        driver:
+          type: string
+          description: Driver nickname.
+          example: ali
+        date:
+          type: string
+          format: date
+          example: '2026-09-17'
+        durationMinutes:
+          type: integer
+          nullable: true
+          example: 45
+        distanceKm:
+          type: integer
+          nullable: true
+          example: 50
+        origin:
+          type: string
+          nullable: true
+          example: Berlin
+        destination:
+          type: string
+          nullable: true
+          example: Potsdam
+        notes:
+          type: string
+          nullable: true
+          example: Evening return
+    TripRequestDTO:
+      type: object
+      description: Trip list entry returned by GET /groups/{groupId}/trips.
+      required: [driver, date, tripId]
+      properties:
+        driver:
+          type: string
+          description: Driver nickname.
+          example: ali
+        date:
+          type: string
+          format: date
+          example: '2026-09-17'
+        durationMinutes:
+          type: integer
+          nullable: true
+          example: 45
+        origin:
+          type: string
+          nullable: true
+          example: Berlin
+        destination:
+          type: string
+          nullable: true
+          example: Potsdam
+        notes:
+          type: string
+          nullable: true
+          example: Evening return
+        tripId:
+          type: string
+          format: uuid
+          example: cccccccc-cccc-cccc-cccc-cccccccccccc
+    Error:
+      type: object
+      description: |
+        Central error envelope from CustomExceptionHandler (CustomErrorResponse).
+        NOTE: the current handler always constructs the body with NOT_FOUND
+        (statusCode 404 / statusName NOT_FOUND) while the HTTP status line
+        carries the real code — examples below show the intended contract.
+      required: [errorCode, detail, statusCode, statusName, timestamp]
+      properties:
+        errorCode:
+          type: string
+          description: Machine-readable code, e.g. validation-exception, authorizationException.
+          example: validation-exception
+        detail:
+          type: string
+          example: Group not found
+        statusCode:
+          type: integer
+          example: 404
+        statusName:
+          type: string
+          example: NOT_FOUND
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-09-17T12:00:00'
+  responses:
+    BadRequest:
+      description: Validation / malformed request (ValidationException → HTTP 400).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            default:
+              value:
+                errorCode: validation-exception
+                detail: Group name must not be blank
+                statusCode: 400
+                statusName: BAD_REQUEST
+                timestamp: '2026-09-17T12:00:00'
+    Unauthorized:
+      description: Authentication failed (AuthenticationException → HTTP 401).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            default:
+              value:
+                errorCode: authentication-exception
+                detail: Invalid email or password
+                statusCode: 401
+                statusName: UNAUTHORIZED
+                timestamp: '2026-09-17T12:00:00'
+    Forbidden:
+      description: Missing, invalid or expired JWT (JwtException / BadCredentialsException → HTTP 403 with errorCode authorizationException).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            default:
+              value:
+                errorCode: authorizationException
+                detail: JWT expired
+                statusCode: 403
+                statusName: FORBIDDEN
+                timestamp: '2026-09-17T12:00:00'
+    NotFound:
+      description: Entity missing (NoEntitiesFoundException → HTTP 404).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            default:
+              value:
+                errorCode: no-entities-found
+                detail: Group aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa not found
+                statusCode: 404
+                statusName: NOT_FOUND
+                timestamp: '2026-09-17T12:00:00'
+    InternalError:
+      description: Server failure (DatabaseException / UnexpectedException / generic fallback → HTTP 500).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            default:
+              value:
+                errorCode: generic-exception
+                detail: An unexpected error occurred, we are working on it.
+                statusCode: 500
+                statusName: INTERNAL_SERVER_ERROR
+                timestamp: '2026-09-17T12:00:00'
+security:
+  - bearerAuth: []
