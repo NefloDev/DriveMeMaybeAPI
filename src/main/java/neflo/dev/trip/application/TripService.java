@@ -1,5 +1,6 @@
 package neflo.dev.trip.application;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import neflo.dev.group.domain.GroupModel;
@@ -43,8 +44,9 @@ public class TripService {
         }
     }
 
+    @Transactional(rollbackOn = Exception.class)
     public TripDTO createTrip(UUID userUuid, UUID groupUuid, TripCreateDTO dto) {
-        log.info("{}.createTrip() >> tripDto :: {}", CLASS_PATH, dto);
+        log.info("{}.createTrip() >> start", CLASS_PATH);
         UserModel foundUser = getUserOrThrow(userUuid);
         log.info("{}.createTrip() >> user found", CLASS_PATH);
 
@@ -52,22 +54,12 @@ public class TripService {
                 .orElseThrow(() -> new NoEntitiesFoundException("group-not-found", "Group not found with selected member."));
         log.info("{}.createTrip() >> group found", CLASS_PATH);
 
+        if (foundGroup.getMembers().stream().noneMatch(m -> m.getId().equals(foundUser.getId()))) {
+            throw new ValidationException("non-member-access", "Non members cannot create a trip in an external group.");
+        }
+
         List<UserModel> passengers = getPassengersOrThrow(dto.passengers(), foundGroup);
-
-        if (foundGroup.getMembers().stream().noneMatch(m -> m.getId().equals(foundUser.getId()))) {
-            throw new ValidationException("non-member-access", "Non members cannot create a trip in an external group");
-        }
-
-        UserModel driver = foundGroup.getMembers().stream().filter(m -> m.getId().equals(dto.driver())).findFirst().orElse(null);
-        if (foundGroup.getMembers().stream().noneMatch(m -> m.getId().equals(foundUser.getId()))) {
-            throw new ValidationException("invalid-driver", "Selected driver is not valid");
-        }
-        if (passengers.stream().anyMatch(m -> m.getId().equals(driver.getId()))) {
-            throw new ValidationException("driver-passenger", "Selected driver cannot be a passenger at the same time");
-        }
-        if (dto.distanceKm() == null || dto.distanceKm() == 0) {
-            throw new ValidationException("invalid-distance", "Trip's distance must be provided");
-        }
+        UserModel driver = getValidatedDriver(dto, foundGroup, passengers);
 
         int durationMinutes = Objects.requireNonNullElse(dto.durationMinutes(), 0);
         int distanceKm = dto.distanceKm();
@@ -87,9 +79,23 @@ public class TripService {
 
         updateTripMembersBalances(driver, foundGroup, durationMinutes, distanceKm, passengers);
 
-        TripDTO response = mapper.entityToDTO(repositoryResponse);
-        log.info("{}.createTrip() >> trip created :: {}", CLASS_PATH, response);
-        return response;
+        log.info("{}.createTrip() >> trip created successfully", CLASS_PATH);
+        return mapper.entityToDTO(repositoryResponse);
+    }
+
+    private static @NonNull UserModel getValidatedDriver(TripCreateDTO dto, GroupModel foundGroup, List<UserModel> passengers) {
+        UserModel driver = foundGroup.getMembers().stream().filter(m -> m.getId().equals(dto.driver())).findFirst()
+                .orElseThrow(() -> new ValidationException("driver-not-found", "The selected driver was not found in the group members list."));
+        if (foundGroup.getMembers().stream().noneMatch(m -> m.getId().equals(driver.getId()))) {
+            throw new ValidationException("invalid-driver", "Selected driver is not valid");
+        }
+        if (passengers.stream().anyMatch(m -> m.getId().equals(driver.getId()))) {
+            throw new ValidationException("driver-passenger", "Selected driver cannot be a passenger at the same time.");
+        }
+        if (dto.distanceKm() == null || dto.distanceKm() <= 0) {
+            throw new ValidationException("invalid-distance", "Trip's distance must be provided.");
+        }
+        return driver;
     }
 
     private void undoTripMembersBalances(TripModel trip) {
@@ -100,7 +106,7 @@ public class TripService {
         }
     }
 
-    private void updateTripMembersBalances(UserModel driver, GroupModel foundGroup, int durationMinutes, int distanceKm, List<UserModel> passengers) {
+    private void updateTripMembersBalances(UserModel driver, GroupModel foundGroup, int durationMinutes, int distanceKm, Collection<UserModel> passengers) {
         jdbcRepository.updateGroupMemberBalance(driver.getId(), foundGroup.getId(), durationMinutes, distanceKm);
 
         for (UserModel passenger : passengers) {
@@ -127,23 +133,37 @@ public class TripService {
     }
 
     private @NonNull UserModel getUserOrThrow(UUID userUuid) {
-        UserModel foundUser = userRepository.findById(userUuid)
+        return userRepository.findById(userUuid)
                 .orElseThrow(() -> new NoEntitiesFoundException("user-not-found", "User not found."));
-        return foundUser;
     }
 
+    @Transactional(rollbackOn = Exception.class)
     public TripDTO updateTrip(UUID userUuid, UUID groupUuid, UUID tripUuid, TripCreateDTO dto) {
-        log.info("{}.updateTrip() >> tripUuid :: {} -- dto :: {}", CLASS_PATH, tripUuid, dto);
+        log.info("{}.updateTrip() >> start", CLASS_PATH);
 
-        TripModel repositoryResponse = repository.findById(tripUuid)
-                .orElseThrow(() -> new NoEntitiesFoundException("trip-not-found", "Trip not found."));
-
-        checkValidRequest(userUuid, groupUuid, repositoryResponse);
+        TripModel repositoryResponse = getValidTrip(tripUuid, userUuid, groupUuid);
         undoTripMembersBalances(repositoryResponse);
 
         List<UserModel> passengers = getPassengersOrThrow(dto.passengers(), repositoryResponse.getGroup());
 
         mapper.updateEntity(repositoryResponse, dto);
+        int updateCount = updateTripFieldsWithValidation(dto, repositoryResponse, passengers);
+
+        repositoryResponse = repository.save(repositoryResponse);
+
+        if (!repositoryResponse.equalsDto(dto) && updateCount == 0) {
+            throw new DatabaseException("trip-not-updated", "Trip couldn't be updated at the moment, try again later.");
+        }
+
+        int durationMinutes = Objects.requireNonNullElse(repositoryResponse.getDurationMinutes(), 0);
+        int distanceKm = repositoryResponse.getDistanceKm();
+        updateTripMembersBalances(repositoryResponse.getDriver(), repositoryResponse.getGroup(), durationMinutes, distanceKm, passengers);
+
+        log.info("{}.updateTrip() >> trip updated successfully", CLASS_PATH);
+        return mapper.entityToDTO(repositoryResponse);
+    }
+
+    private int updateTripFieldsWithValidation(TripCreateDTO dto, TripModel repositoryResponse, List<UserModel> passengers) {
         int updateCount = 0;
 
         if (dto.origin() != null && !dto.origin().equals(repositoryResponse.getOrigin())) {
@@ -168,46 +188,44 @@ public class TripService {
             repositoryResponse.setPassengers(new HashSet<>(passengers));
         }
 
-        Optional<UserModel> driver = userRepository.findById(dto.driver());
-        if (driver.isPresent()) {
-            repositoryResponse.setDriver(driver.get());
+        try {
+            UserModel driver = getValidatedDriver(dto, repositoryResponse.getGroup(), passengers);
+            repositoryResponse.setDriver(driver);
+        } catch (ValidationException e) {
+            log.warn("Trip update did not find a valid driver to change to");
+            if (dto.driver() != null) {
+                throw new ValidationException("invalid-driver", "The selected driver for updating is not valid");
+            }
         }
 
-        repositoryResponse = repository.save(repositoryResponse);
-
-        if (!repositoryResponse.equalsDto(dto) && updateCount == 0) {
-            throw new DatabaseException("trip-not-updated", "Trip couldn't be updated at the moment, try again later.");
-        }
-
-        int durationMinutes = Objects.requireNonNullElse(repositoryResponse.getDurationMinutes(), 0);
-        int distanceKm = repositoryResponse.getDistanceKm();
-        updateTripMembersBalances(repositoryResponse.getDriver(), repositoryResponse.getGroup(), durationMinutes, distanceKm, passengers);
-
-        log.info("{}.updateTrip() >> trip updated successfully", CLASS_PATH);
-        return mapper.entityToDTO(repositoryResponse);
+        return updateCount;
     }
 
+    @Transactional(rollbackOn = Exception.class)
     public void deleteTrip(UUID userUuid, UUID groupUuid, UUID tripUuid) {
-        log.info("{}.deleteTrip() >> tripUuid :: {}", CLASS_PATH, tripUuid);
+        log.info("{}.deleteTrip() >> start", CLASS_PATH);
 
-        TripModel repositoryResponse = repository.findById(tripUuid)
-                .orElseThrow(() -> new NoEntitiesFoundException("trip-not-found", "Trip not found."));
-
-        checkValidRequest(userUuid, groupUuid, repositoryResponse);
+        TripModel repositoryResponse = getValidTrip(tripUuid, userUuid, groupUuid);
 
         repository.delete(repositoryResponse);
+        undoTripMembersBalances(repositoryResponse);
     }
 
     public TripDTO getTripDetail(UUID userUuid, UUID groupUuid, UUID tripUuid) {
-        log.info("{}.getTripDetail() >> tripUuid :: {}", CLASS_PATH, tripUuid);
+        log.info("{}.getTripDetail() >> start", CLASS_PATH);
 
+        TripModel repositoryResponse = getValidTrip(tripUuid, userUuid, groupUuid);
+
+        log.info("{}.getTripDetail() >> trip found", CLASS_PATH);
+        return mapper.entityToDTO(repositoryResponse);
+    }
+
+    private @NonNull TripModel getValidTrip(UUID tripUuid, UUID userUuid, UUID groupUuid) {
         TripModel repositoryResponse = repository.findById(tripUuid)
                 .orElseThrow(() -> new NoEntitiesFoundException("trip-not-found", "Trip not found."));
 
         checkValidRequest(userUuid, groupUuid, repositoryResponse);
-
-        log.info("{}.getTripDetail() >> trip found :: {}", CLASS_PATH, repositoryResponse);
-        return mapper.entityToDTO(repositoryResponse);
+        return repositoryResponse;
     }
 
 

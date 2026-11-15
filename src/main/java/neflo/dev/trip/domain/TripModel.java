@@ -24,6 +24,7 @@ import java.util.UUID;
 public class TripModel implements Persistable<UUID> {
 
     @Id
+    @NonNull
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "ID")
     private UUID id;

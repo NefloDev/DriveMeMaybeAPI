@@ -23,6 +23,7 @@ import java.util.UUID;
 public class GroupModel implements Persistable<UUID> {
 
     @Id
+    @NonNull
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "ID")
     private UUID id;

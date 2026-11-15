@@ -17,6 +17,7 @@ import neflo.dev.trip.infrastructure.mapper.TripMapper;
 import neflo.dev.user.domain.UserModel;
 import neflo.dev.user.infrastructure.mapper.UserMapper;
 import neflo.dev.user.infrastructure.persistence.UserRepository;
+import org.jspecify.annotations.NonNull;
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.ServerErrorMessage;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -32,6 +33,7 @@ public class GroupService {
 
     private static final int MAX_CODE_GENERATION_ATTEMPTS = 5;
     private static final String CLASS_PATH = "DriveMeMaybeAPI.GroupService";
+    public static final String GRP_GROUPS_GROUP_CODE_KEY = "GRP_GROUPS_GROUP_CODE_KEY";
 
     private final GroupRepository repository;
     private final UserRepository userRepository;
@@ -47,25 +49,28 @@ public class GroupService {
         }
     }
 
-    public GroupDTO getGroupDetail(UUID userUuid, UUID groupUuid) {
-        log.info("{}.getGroupDetail() >> groupUuid :: {}", CLASS_PATH, groupUuid);
-
+    private @NonNull GroupModel getValidGroup(UUID userUuid, UUID groupUuid) {
         GroupModel repositoryResponse = repository.findById(groupUuid)
                 .orElseThrow(() -> new NoEntitiesFoundException("group-not-found", "Group not found."));
 
         checkUserIsMember(userUuid, repositoryResponse);
+        return repositoryResponse;
+    }
 
-        log.info("{}.getGroupDetail() >> group found :: {}", CLASS_PATH, repositoryResponse);
+    public GroupDTO getGroupDetail(UUID userUuid, UUID groupUuid) {
+        log.info("{}.getGroupDetail() >> start", CLASS_PATH);
+
+        GroupModel repositoryResponse = getValidGroup(userUuid, groupUuid);
+
+        log.info("{}.getGroupDetail() >> group found", CLASS_PATH);
         return mapper.entityToDTO(repositoryResponse);
     }
 
+    @Transactional(rollbackOn = Exception.class)
     public GroupDTO updateGroup(UUID userUuid, UUID groupUuid, GroupDTO dto) {
-        log.info("{}.updateGroup() >> groupUuid :: {} -- dto :: {}", CLASS_PATH, groupUuid, dto);
+        log.info("{}.updateGroup() >> start", CLASS_PATH);
 
-        GroupModel repositoryResponse = repository.findById(groupUuid)
-                .orElseThrow(() -> new NoEntitiesFoundException("group-not-found", "Group not found."));
-
-        checkUserIsMember(userUuid, repositoryResponse);
+        GroupModel repositoryResponse = getValidGroup(userUuid, groupUuid);
 
         mapper.updateEntity(repositoryResponse, dto);
 
@@ -88,11 +93,11 @@ public class GroupService {
         return mapper.entityToDTO(repositoryResponse);
     }
 
+    @Transactional(rollbackOn = Exception.class)
     public void leaveGroup(UUID userUuid, UUID groupUuid) {
-        log.info("{}.leaveGroup() >> groupUuid :: {} -- userUuid :: {}", CLASS_PATH, groupUuid, userUuid);
+        log.info("{}.leaveGroup() >> start", CLASS_PATH);
 
-        GroupModel repositoryResponse = repository.findById(groupUuid)
-                .orElseThrow(() -> new NoEntitiesFoundException("group-not-found", "Group not found."));
+        GroupModel repositoryResponse = getValidGroup(userUuid, groupUuid);
 
         if (repositoryResponse.getMembers().size() == 1 && repositoryResponse.getMembers().stream().allMatch(m -> m.getId().equals(userUuid))) {
             repositoryResponse.getMembers().forEach(
@@ -109,58 +114,46 @@ public class GroupService {
     }
 
     public List<GroupMemberBalanceDTO> getGroupMembersBalance(UUID userUuid, UUID groupUuid) {
-        log.info("{}.getGroupMembersBalance() >> groupUuid :: {}", CLASS_PATH, groupUuid);
+        log.info("{}.getGroupMembersBalance() >> start", CLASS_PATH);
 
-        GroupModel repositoryResponse = repository.findById(groupUuid)
-                .orElseThrow(() -> new NoEntitiesFoundException("group-not-found", "Group not found."));
+        GroupModel repositoryResponse = getValidGroup(userUuid, groupUuid);
         log.info("{}.getGroupMembersBalance() >> group found", CLASS_PATH);
 
-        checkUserIsMember(userUuid, repositoryResponse);
+        List<GroupMemberBalanceDTO> groupMembersBalance = jdbcRepository.getGroupMembersBalanceInfo(repositoryResponse.getId());
+        log.info("{}.getGroupMembersBalance() >> groupMembersBalance retrieved", CLASS_PATH);
 
-        List<GroupMemberBalanceDTO> groupMembers = jdbcRepository.getGroupMembersBalanceInfo(repositoryResponse.getId());
-        log.info("{}.getGroupMembersBalance() >> groupMembers :: {}", CLASS_PATH, groupMembers.stream().map(GroupMemberBalanceDTO::nickname).toList());
-
-        return groupMembers;
+        return groupMembersBalance;
     }
 
     public List<GroupMemberDTO> getGroupMembers(UUID userUuid, UUID groupUuid) {
-        log.info("{}.getGroupMembers() >> groupUuid :: {}", CLASS_PATH, groupUuid);
+        log.info("{}.getGroupMembers() >> groupUuid", CLASS_PATH);
 
-        GroupModel repositoryResponse = repository.findById(groupUuid)
-                .orElseThrow(() -> new NoEntitiesFoundException("group-not-found", "Group not found."));
+        GroupModel repositoryResponse = getValidGroup(userUuid, groupUuid);
         log.info("{}.getGroupMembers() >> group found", CLASS_PATH);
 
-        checkUserIsMember(userUuid, repositoryResponse);
-
         List<GroupMemberDTO> groupMembers = repositoryResponse.getMembers().stream().map(userMapper::entityToGroupMemberDTO).toList();
-        log.info("{}.getGroupMembers() >> groupMembers :: {}", CLASS_PATH, groupMembers.stream().map(GroupMemberDTO::nickname).toList());
+        log.info("{}.getGroupMembers() >> groupMembers retrieved", CLASS_PATH);
 
         return groupMembers;
     }
 
     public List<TripRequestDTO> getGroupTrips(UUID userUuid, UUID groupUuid) {
-        log.info("{}.getGroupTrips() >> groupUuid :: {}", CLASS_PATH, groupUuid);
+        log.info("{}.getGroupTrips() >> start", CLASS_PATH);
 
-        GroupModel repositoryResponse = repository.findById(groupUuid)
-                .orElseThrow(() -> new NoEntitiesFoundException("group-not-found", "Group not found."));
+        GroupModel repositoryResponse = getValidGroup(userUuid, groupUuid);
         log.info("{}.getGroupTrips() >> group found", CLASS_PATH);
 
-        checkUserIsMember(userUuid, repositoryResponse);
+        List<TripRequestDTO> groupTrips = repositoryResponse.getTrips().stream().map(tripMapper::entityToRequestDTO).toList();
+        log.info("{}.getGroupTrips() >> groupTrips retrieved", CLASS_PATH);
 
-        List<TripRequestDTO> groupMembers = repositoryResponse.getTrips().stream().map(tripMapper::entityToRequestDTO).toList();
-        log.info("{}.getGroupTrips() >> groupMembers :: {}", CLASS_PATH, groupMembers.stream().map(TripRequestDTO::date).toList());
-
-        return groupMembers;
+        return groupTrips;
     }
 
     public GroupInsights getGroupInsights(UUID userUuid, UUID groupUuid, GroupInsightsRequest groupInsightsRequest) {
-        log.info("{}.getGroupInsights() >> groupUuid :: {} -- groupInsightsRequest :: {}", CLASS_PATH, groupUuid, groupInsightsRequest);
+        log.info("{}.getGroupInsights() >> groupInsightsRequest :: {}", CLASS_PATH, groupInsightsRequest);
 
-        GroupModel repositoryResponse = repository.findById(groupUuid)
-                .orElseThrow(() -> new NoEntitiesFoundException("group-not-found", "Group not found."));
+        getValidGroup(userUuid, groupUuid);
         log.info("{}.getGroupInsights() >> group found", CLASS_PATH);
-
-        checkUserIsMember(userUuid, repositoryResponse);
 
         GroupInsights response = switch (groupInsightsRequest.periodType()) {
             case YEARLY -> jdbcRepository.getYearlyGroupInsights(groupUuid, groupInsightsRequest.year());
@@ -172,7 +165,7 @@ public class GroupService {
         return response;
     }
 
-    @Transactional
+    @Transactional(rollbackOn = Exception.class)
     public GroupDTO createGroup(UUID userUuid, GroupRequestDTO groupDTO) {
         log.info("{}.createGroup() >> groupDTO :: {}", CLASS_PATH, groupDTO);
         UserModel foundUser = userRepository.findById(userUuid)
@@ -180,23 +173,9 @@ public class GroupService {
         log.info("{}.createGroup() >> user found", CLASS_PATH);
 
         for (int attempt = 1; attempt <= MAX_CODE_GENERATION_ATTEMPTS; attempt++) {
-            GroupModel groupModel = GroupModel.builder()
-                    .name(groupDTO.name())
-                    .groupCode(codeGenerator.generate())
-                    .build();
-
-            if (groupDTO.pfp().isPresent()) {
-                groupModel.setPfp(groupDTO.pfp().get());
-            }
-
             try {
-                groupModel = repository.save(groupModel);
-
-                foundUser.getGroups().add(groupModel);
-                userRepository.save(foundUser);
-
-                GroupDTO response = mapper.entityToDTO(groupModel);
-                log.info("{}.createGroup() >> group created :: {}", CLASS_PATH, response);
+                GroupDTO response = createGroup(groupDTO, foundUser);
+                log.info("{}.createGroup() >> group created", CLASS_PATH);
                 return response;
             } catch (DataIntegrityViolationException e) {
                 if (!isGroupCodeCollision(e)) {
@@ -210,6 +189,24 @@ public class GroupService {
         throw new DatabaseException("group-code-not-generated", "Unable to generate a unique group  after " + MAX_CODE_GENERATION_ATTEMPTS + " attempts.");
     }
 
+    private GroupDTO createGroup(GroupRequestDTO groupDTO, UserModel foundUser) {
+        GroupModel groupModel = GroupModel.builder()
+                .name(groupDTO.name())
+                .groupCode(codeGenerator.generate())
+                .build();
+
+        if (groupDTO.pfp().isPresent()) {
+            groupModel.setPfp(groupDTO.pfp().get());
+        }
+
+        groupModel = repository.save(groupModel);
+
+        foundUser.getGroups().add(groupModel);
+        userRepository.save(foundUser);
+
+        return mapper.entityToDTO(groupModel);
+    }
+
     private boolean isGroupCodeCollision(DataIntegrityViolationException exception) {
         Throwable cause = exception;
 
@@ -217,7 +214,7 @@ public class GroupService {
             if (cause instanceof PSQLException psqlException) {
                 ServerErrorMessage error = psqlException.getServerErrorMessage();
 
-                return error != null && "GRP_GROUPS_GROUP_CODE_KEY".equals(error.getConstraint());
+                return error != null && GRP_GROUPS_GROUP_CODE_KEY.equals(error.getConstraint());
             }
 
             cause = cause.getCause();
