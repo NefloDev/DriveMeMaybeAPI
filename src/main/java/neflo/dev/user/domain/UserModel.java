@@ -23,6 +23,7 @@ import java.util.*;
 public class UserModel implements Persistable<UUID>, UserDetails {
 
     @Id
+    @NonNull
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "ID")
     private UUID id;

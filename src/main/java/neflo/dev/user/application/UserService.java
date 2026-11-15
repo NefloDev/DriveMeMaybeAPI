@@ -1,5 +1,6 @@
 package neflo.dev.user.application;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import neflo.dev.group.api.GroupDTO;
@@ -17,6 +18,7 @@ import neflo.dev.user.infrastructure.mapper.UserMapper;
 import neflo.dev.user.infrastructure.persistence.LanguagesRepository;
 import neflo.dev.user.infrastructure.persistence.UserRepository;
 import org.jspecify.annotations.NonNull;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -36,13 +38,14 @@ public class UserService {
     private final LanguagesRepository langRepository;
     private final UserMapper mapper;
     private final GroupMapper groupMapper;
+    private final PasswordEncoder passwordEncoder;
 
     public UserResponseDTO getUserDetail(UUID uuid) {
-        log.info("{}.getUserDetail() >> uuid :: {}", CLASS_PATH, uuid);
+        log.info("{}.getUserDetail() >> start", CLASS_PATH);
 
         UserModel repositoryResponse = getUserOrThrow(uuid);
 
-        log.info("{}.getUserDetail() >> user found :: {}", CLASS_PATH, repositoryResponse);
+        log.info("{}.getUserDetail() >> user found", CLASS_PATH);
         return mapper.entityToResponseDTO(repositoryResponse);
     }
 
@@ -59,8 +62,9 @@ public class UserService {
                 .orElseThrow(() -> new NoEntitiesFoundException("user-not-found", "User not found."));
     }
 
+    @Transactional(rollbackOn = Exception.class)
     public UserResponseDTO updateUser(UUID uuid, UserDTO dto) {
-        log.info("{}.updateUser() >> uuid :: {} -- dto :: {}", CLASS_PATH, uuid, dto);
+        log.info("{}.updateUser() >> start", CLASS_PATH);
 
         UserModel repositoryResponse = getUserOrThrow(uuid);
 
@@ -68,27 +72,11 @@ public class UserService {
         mapper.updateEntity(repositoryResponse, dto);
         repositoryResponse.setPrefLang(langByPref);
 
-        boolean hasUpdatedPassword = false;
-        if (dto.password().isPresent()) {
-            String password = dto.password().get();
-            if (!password.equals(repositoryResponse.getPassword())) {
-                hasUpdatedPassword = true;
-                repositoryResponse.setPassword(password);
-            }
-        }
-
-        boolean hasUpdatedPfp = false;
-        if (dto.pfp().isPresent()) {
-            String pfpB64 = dto.pfp().get();
-            if (!pfpB64.equals(repositoryResponse.getPfp())) {
-                hasUpdatedPfp = true;
-                repositoryResponse.setPfp(pfpB64);
-            }
-        }
+        int updateCount = updateUserWithValidation(dto, repositoryResponse);
 
         repositoryResponse = repository.save(repositoryResponse);
 
-        if (!repositoryResponse.equalsDto(dto) && !hasUpdatedPassword && !hasUpdatedPfp) {
+        if (!repositoryResponse.equalsDto(dto) && updateCount == 0) {
             throw new DatabaseException("user-not-updated", "User couldn't be updated at the moment, try again later.");
         }
 
@@ -96,8 +84,30 @@ public class UserService {
         return mapper.entityToResponseDTO(repositoryResponse);
     }
 
+    private int updateUserWithValidation(UserDTO dto, UserModel repositoryResponse) {
+        int updateCount = 0;
+
+        if (dto.password().isPresent()) {
+            String password = passwordEncoder.encode(dto.password().get());
+            if (!password.equals(repositoryResponse.getPassword())) {
+                updateCount++;
+                repositoryResponse.setPassword(password);
+            }
+        }
+
+        if (dto.pfp().isPresent()) {
+            String pfpB64 = dto.pfp().get();
+            if (!pfpB64.equals(repositoryResponse.getPfp())) {
+                updateCount++;
+                repositoryResponse.setPfp(pfpB64);
+            }
+        }
+        return updateCount;
+    }
+
+    @Transactional(rollbackOn = Exception.class)
     public void deleteUser(UUID uuid) {
-        log.info("{}.deleteUser() >> uuid :: {}", CLASS_PATH, uuid);
+        log.info("{}.deleteUser() >> start", CLASS_PATH);
 
         repository.deleteById(uuid);
 
@@ -108,19 +118,20 @@ public class UserService {
     }
 
     public List<GroupDTO> getUserGroups(UUID uuid) {
-        log.info("{}.getUserGroups() >> uuid :: {}", CLASS_PATH, uuid);
+        log.info("{}.getUserGroups() >> start", CLASS_PATH);
 
         UserModel repositoryResponse = getUserOrThrow(uuid);
         log.info("{}.getUserGroups() >> user found", CLASS_PATH);
 
         List<GroupDTO> userGroups = repositoryResponse.getGroups().stream().map(groupMapper::entityToDTO).toList();
-        log.info("{}.getUserGroups() >> userGroups :: {}", CLASS_PATH, userGroups.stream().map(GroupDTO::name).toList());
+        log.info("{}.getUserGroups() >> userGroups retrieved", CLASS_PATH);
 
         return userGroups;
     }
 
+    @Transactional(rollbackOn = Exception.class)
     public GroupDTO joinGroup(UUID uuid, String groupCode) {
-        log.info("{}.joinGroup() >> uuid :: {} -- groupCode :: {}", CLASS_PATH, uuid, groupCode);
+        log.info("{}.joinGroup() >> start", CLASS_PATH);
 
         UserModel repositoryResponse = getUserOrThrow(uuid);
         log.info("{}.joinGroup() >> user found", CLASS_PATH);
