@@ -11,8 +11,8 @@ import java.util.Optional;
 @Mapper(componentModel = "spring")
 public interface GroupMapper {
 
-    @Mapping(target = "groupMembers", expression = "java(entity.getMembers().size())")
-    @Mapping(target = "groupTrips", expression = "java(entity.getTrips().size())")
+    @Mapping(target = "groupMembers", expression = "java(entity.getMembers() != null ? entity.getMembers().size() : 0)")
+    @Mapping(target = "groupTrips", expression = "java(entity.getTrips() != null ? entity.getTrips().size() : 0)")
     GroupDTO entityToDTO(GroupModel entity);
 
     @Mapping(target = "id", ignore = true)
