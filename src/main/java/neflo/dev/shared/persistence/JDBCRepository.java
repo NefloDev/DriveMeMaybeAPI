@@ -27,6 +27,8 @@ public class JDBCRepository {
             params[1] = LocalDate.of(yearMonth.year(), yearMonth.month(), 1);
 
             return db.query(GroupQueries.INSIGHTS_MONTHLY, GroupQueries.MONTHLY_INSIGHTS_RSE, params);
+        } catch (DatabaseException e) {
+            throw e;
         } catch (Exception e) {
             throw new DatabaseException("monthly-insights-error", "There was an error trying to retrieve requested's month group's insights.", e);
         }
@@ -39,6 +41,8 @@ public class JDBCRepository {
             params[1] = LocalDate.of(year, 1, 1);
 
             return db.query(GroupQueries.INSIGHTS_YEARLY, GroupQueries.YEARLY_INSIGHTS_RSE, params);
+        } catch (DatabaseException e) {
+            throw e;
         } catch (Exception e) {
             throw new DatabaseException("yearly-insights-error", "There was an error trying to retrieve requested's year group's insights.", e);
         }
@@ -53,6 +57,8 @@ public class JDBCRepository {
             params[3] = userUuid;
 
             db.update(UserQueries.UPDATE_USER_BALANCE, params);
+        } catch (DatabaseException e) {
+            throw e;
         } catch (Exception e) {
             throw new DatabaseException("balance-update-error", "There was an error trying to update some user's time and distance balance.", e);
         }
@@ -64,6 +70,8 @@ public class JDBCRepository {
             params[0] = groupUuid;
 
             return db.query(GroupQueries.GET_GROUP_MEMBERS_BALANCE, GroupQueries.GROUP_MEMBER_BALANCE_DTO_RM, params);
+        } catch (DatabaseException e) {
+            throw e;
         } catch (Exception e) {
             throw new DatabaseException("members-balance-error", "There was an error trying to retrieve requested's group's members' balance information.", e);
         }
